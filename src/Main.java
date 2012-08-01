@@ -90,16 +90,16 @@ public class Main {
             Arrays.sort(pixHist, new GrayPixComparator());
             final Set<Integer> reserverColor = new HashSet<Integer>();
             for (int i = 0; i < pixHist.length; i++) {
-                if (pixHist[i].volume < 200) {
+                if (pixHist[i].volume < 200 && pixHist[i].color < 128) {
                     reserverColor.add(new Color(pixHist[i].color, pixHist[i].color,
                             pixHist[i].color).getRGB());
+                    System.out.println("color reserve " + pixHist[i].color + " " + pixHist[i].volume);
                 }
                 System.out.println("color " + pixHist[i].color + " " + pixHist[i].volume);
             }
 
             // for(int i = hist.length - 2;i >= hist.length - 7;i--) {
-            // System.out.println("color removed " + pixHist[i].color + " " +
-            // pixHist[i].volume);
+            // 
 
             // }
 
