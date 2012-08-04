@@ -292,15 +292,30 @@ public class Main {
             //System.out.println("\t degree=" + degree);
             final BufferedImage rotateImage = clipEmpty(rotateTextImage(rawNumberImage,degree));
             final int[][] rotateImagesAccArrays = toAccArrays(rotateImage);
-            final int sumOfRawNumberPix = calculateSumPixles(rotateImagesAccArrays,new Rectangle(0,0,rotateImage.getWidth(),rotateImage.getHeight()));
+            final int sumOfRawNumberPix = 1 + calculateSumPixles(rotateImagesAccArrays,new Rectangle(0,0,rotateImage.getWidth(),rotateImage.getHeight()));
+            final int sumleftTopOfRawNumberPix = 1 +calculateSumPixles(rotateImagesAccArrays,new Rectangle(0,0,rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
+            final int sumleftDownOfRawNumberPix = 1 + calculateSumPixles(rotateImagesAccArrays,new Rectangle(0,rotateImage.getHeight() >> 1,rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
+            final int sumrightTopOfRawNumberPix = 1 + calculateSumPixles(rotateImagesAccArrays,new Rectangle(rotateImage.getWidth() >> 1,0,rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
+            final int sumrightDownOfRawNumberPix = 1 + calculateSumPixles(rotateImagesAccArrays,new Rectangle(rotateImage.getWidth() >> 1,rotateImage.getHeight(),rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
+            
             int debug_reduce = 0;
             int debug_total = 0;
             for (int x = 0; x < verf_img.getWidth() - rotateImage.getWidth(); x++) {
                 for (int y = 0; y < verf_img.getHeight() - rotateImage.getHeight(); y++) {
                 	debug_total++;
-                	final int sumOfRectangle = calculateSumPixles(verfImgAccArrays,new Rectangle(x,y,rotateImage.getWidth(),rotateImage.getHeight()));
+                	
+                	final int sumOfRectangle = 1 + calculateSumPixles(verfImgAccArrays,new Rectangle(x,y,rotateImage.getWidth(),rotateImage.getHeight()));
+                    final int sumleftTopRectangle = 1 + calculateSumPixles(verfImgAccArrays,new Rectangle(x,y,rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
+                	final int sumleftDownRectangle = 1 + calculateSumPixles(verfImgAccArrays,new Rectangle(x,y + (rotateImage.getHeight() >> 1),rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
+                	final int sumrightTopRectangle = 1 + calculateSumPixles(verfImgAccArrays,new Rectangle(x + (rotateImage.getWidth() >> 1),y,rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
+                	final int sumrightDownRectangle = 1 + calculateSumPixles(verfImgAccArrays,new Rectangle(x + (rotateImage.getWidth() >> 1),y+ (rotateImage.getHeight() >> 1),rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
                     
-                	if((float) sumOfRectangle / (float) sumOfRawNumberPix > 0.8f) {
+                	
+                	if((float) sumOfRectangle / (float) sumOfRawNumberPix > 0.9f &&
+                    		(float) sumleftTopRectangle / (float) sumleftTopOfRawNumberPix > 0.9f &&
+                    		(float) sumleftDownRectangle / (float) sumleftDownOfRawNumberPix > 0.9f &&
+                    		(float) sumrightTopRectangle / (float) sumrightTopOfRawNumberPix > 0.9f &&
+                    		(float) sumrightDownRectangle / (float) sumrightDownOfRawNumberPix > 0.9f) {
                 	
 	                    float score = score(verf_img,rotateImage,x,y);
 	                    if(score > threshold) {
@@ -449,6 +464,8 @@ public class Main {
             
 
         }
+        
+        System.out.println("TP=" + success / total);
         
         
         
