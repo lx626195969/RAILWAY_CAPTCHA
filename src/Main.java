@@ -12,6 +12,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 import javax.imageio.ImageIO;
 
@@ -227,34 +229,7 @@ public class Main {
         
         return clippedImage;
     }
-    
-    public static int[][] toAccArrays(BufferedImage img) {
-        int[][] accArrays = new int[img.getHeight()][img.getWidth()];
-            for (int y = 0; y < img.getHeight(); y++) {
-                for (int x = 0; x < img.getWidth(); x++) {
-                final int left = 0 == x ? 0 : accArrays[y][x - 1];
-                final int top = 0 == y ? 0 : accArrays[y - 1][x];
-                final int lefttop = 0 == x || 0 == y ? 0 : accArrays[y - 1][x - 1];
-               
-                accArrays[y][x] = left + top - lefttop + (img.getRGB(x, y) != Color.BLACK.getRGB() ? 1 : 0);
-                //System.out.println("(" + x + "," + y + ")=" + img.getRGB(x, y));
-                        
-            }
-        }
-        return accArrays;
-    }
-    
-    public static int calculateSumPixles(int[][] accArrays,Rectangle r) {
-        int startX = r.x < 0 ? 0 : r.x;
-        int startY = r.y < 0 ? 0 : r.y;
-        int endX = r.x + r.width - 1 >= accArrays.length ? accArrays.length - 1 : r.x + r.width - 1;
-        int endY = r.y + r.height - 1>= accArrays[0].length ? accArrays[0].length - 1 : r.y + r.height - 1;
         
-        System.out.println("startX=" + startX + " startY=" + startY + " endX=" + endX + " endY="+ endY);
-        
-        return accArrays[endX][endY] - (0 == startY ? 0 : accArrays[endX][startY - 1]) - (0 == startX ? 0 : accArrays[startX - 1][endY]) + (0 == startX || 0 == startY ? 0 : accArrays[startX -1][startY - 1]);
-    }
-    
     public static boolean joinToRectangle(HashMap<Rectangle,Float> map,Rectangle r,float score) {
         Rectangle replaceKey = null;
         float minScore = Float.MAX_VALUE;
@@ -308,28 +283,70 @@ public class Main {
         final int RANGE = 60;
         final int fontSize = 26;
         final Font font = new Font("Times New Roman",Font.BOLD,fontSize);
-        final BufferedImage rawNumberImage = clipEmpty(createTextImage(v,(int)Math.sqrt(fontSize*fontSize + fontSize*fontSize),font));
+        final BufferedImage rawNumberImage = createTextImage(v,(int)Math.sqrt(fontSize*fontSize + fontSize*fontSize),font);
         final HashMap<Rectangle,Float> mapOfRectangle = new HashMap<Rectangle,Float>();
+        
+        final int[][] verfImgAccArrays = toAccArrays(verf_img);        
         
         for(int degree = -RANGE;degree <= RANGE;degree++) {
             //System.out.println("\t degree=" + degree);
-            final BufferedImage rotateImage = rotateTextImage(rawNumberImage,degree);
-
-            //DO XOR
+            final BufferedImage rotateImage = clipEmpty(rotateTextImage(rawNumberImage,degree));
+            final int[][] rotateImagesAccArrays = toAccArrays(rotateImage);
+            final int sumOfRawNumberPix = calculateSumPixles(rotateImagesAccArrays,new Rectangle(0,0,rotateImage.getWidth(),rotateImage.getHeight()));
+            int debug_reduce = 0;
+            int debug_total = 0;
             for (int x = 0; x < verf_img.getWidth() - rotateImage.getWidth(); x++) {
                 for (int y = 0; y < verf_img.getHeight() - rotateImage.getHeight(); y++) {
+                	debug_total++;
+                	final int sumOfRectangle = calculateSumPixles(verfImgAccArrays,new Rectangle(x,y,rotateImage.getWidth(),rotateImage.getHeight()));
                     
-                    float score = score(verf_img,rotateImage,x,y);
-                    if(score > threshold) {
-                        joinToRectangle(mapOfRectangle,new Rectangle(x,y,rotateImage.getWidth(),rotateImage.getHeight()),score);
-                    }
+                	if((float) sumOfRectangle / (float) sumOfRawNumberPix > 0.8f) {
+                	
+	                    float score = score(verf_img,rotateImage,x,y);
+	                    if(score > threshold) {
+	                        joinToRectangle(mapOfRectangle,new Rectangle(x,y,rotateImage.getWidth(),rotateImage.getHeight()),score);
+	                    }
+                	}
+                	else {
+                		debug_reduce++;
+                	}
                     
                 }
             }
             
+            //System.out.println("redeuce=" + (float)debug_reduce / (float) debug_total);
+            
         }
         
         return mapOfRectangle;
+    }
+    
+    public static int[][] toAccArrays(BufferedImage img) {
+        int[][] accArrays = new int[img.getWidth()][img.getHeight()];
+            for (int y = 0; y < img.getHeight(); y++) {
+            	for (int x = 0; x < img.getWidth(); x++) {
+            		
+                final int left = 0 == x ? 0 : accArrays[x - 1][y];
+                final int top = 0 == y ? 0 : accArrays[x][y - 1];
+                final int lefttop = 0 == x || 0 == y ? 0 : accArrays[x - 1][y - 1];
+               
+                accArrays[x][y] = left + top - lefttop + (img.getRGB(x, y) != Color.BLACK.getRGB() ? 1 : 0);
+                //System.out.println("(" + x + "," + y + ")=" + img.getRGB(x, y));
+                        
+            }
+        }
+        return accArrays;
+    }
+    
+    public static int calculateSumPixles(int[][] accArrays,Rectangle r) {
+        int startX = r.x < 0 ? 0 : r.x;
+        int startY = r.y < 0 ? 0 : r.y;
+        int endX = r.x + r.width - 1 >= accArrays.length ? accArrays.length - 1 : r.x + r.width - 1;
+        int endY = r.y + r.height - 1>= accArrays[0].length ? accArrays[0].length - 1 : r.y + r.height - 1;
+        
+        //System.out.println("startX=" + startX + " startY=" + startY + " endX=" + endX + " endY="+ endY);
+        
+        return accArrays[endX][endY] - (0 == startY ? 0 : accArrays[endX][startY - 1]) - (0 == startX ? 0 : accArrays[startX - 1][endY]) + (0 == startX || 0 == startY ? 0 : accArrays[startX -1][startY - 1]);
     }
     
 
@@ -337,40 +354,40 @@ public class Main {
         /*
         BufferedImage b = new BufferedImage(4,3,BufferedImage.TYPE_BYTE_BINARY);
         b.setRGB(0, 0, Color.WHITE.getRGB());
-        b.setRGB(0, 1, Color.BLACK.getRGB());
-        b.setRGB(0, 2, Color.WHITE.getRGB());
-        
         b.setRGB(1, 0, Color.WHITE.getRGB());
-        b.setRGB(1, 1, Color.WHITE.getRGB());
-        b.setRGB(1, 2, Color.WHITE.getRGB());
-        
         b.setRGB(2, 0, Color.WHITE.getRGB());
-        b.setRGB(2, 1, Color.WHITE.getRGB());
-        b.setRGB(2, 2, Color.WHITE.getRGB());
+        b.setRGB(3, 0, Color.BLACK.getRGB());
         
-        b.setRGB(3, 0, Color.WHITE.getRGB());
-        b.setRGB(3, 1, Color.BLACK.getRGB());
-        b.setRGB(3, 2, Color.WHITE.getRGB());
+        b.setRGB(0, 1, Color.BLACK.getRGB());
+        b.setRGB(1, 1, Color.WHITE.getRGB());
+        b.setRGB(2, 1, Color.WHITE.getRGB());
+        b.setRGB(3, 1, Color.WHITE.getRGB());
+        
+        b.setRGB(0, 2, Color.WHITE.getRGB());
+        b.setRGB(1, 2, Color.WHITE.getRGB());
+        b.setRGB(2, 2, Color.BLACK.getRGB());
+        b.setRGB(3, 2, Color.BLACK.getRGB());        
         
         int[][] a = toAccArrays(b);
-        for(int y =0;y < a.length;y++) {
-            for(int x = 0;x < a[y].length;x++) {
-                System.out.println("(" + y + "," + x + ")=" + a[y][x]);
+        for(int x = 0;x < a.length;x++) {
+            for(int y = 0;y < a[x].length;y++) {
+                System.out.println("(" + x + "," + y + ")=" + a[x][y]);
             }
         }
         
-        System.out.println("sum=" + calculateSumPixles(a,new Rectangle(0,1,4,2)));
+        System.out.println("sum=" + calculateSumPixles(a,new Rectangle(1,1,2,2)));
         */
         
         final File inputFolder = new File(args[0]);
-
+        float success = 0.0f;
+        float total = 0.0f;
         for (File inputFile : inputFolder.listFiles()) {
             
             final String filename = inputFile.getName().toLowerCase();
             if(!filename.endsWith(".jpg") || filename.startsWith("out")) {
                 continue;
             }
-            
+            total++;
             System.out.println("inputFile=" + inputFile);
             
             final BufferedImage rawImg = ImageIO.read(inputFile);
@@ -396,13 +413,38 @@ public class Main {
             
             final BufferedImage binaryRawImage = toBinaryImage(removedColorImage(grayRawImage, reserverColor, Color.BLACK));
             final Graphics2D g = binaryRawImage.createGraphics();
+            final HashMap<Rectangle,Float> totalEntry = new HashMap<Rectangle,Float>();
+            final HashMap<Rectangle,Integer> totalIntegerEntry = new HashMap<Rectangle,Integer>();
+            
             g.setColor(Color.WHITE);
-            for(Map.Entry<Rectangle,Float> entry : findNumber(0,binaryRawImage).entrySet()) {
-                
-                System.out.println("\tRect " + entry.getKey() + "," + entry.getValue());
+            for(int v = 9;v >= 0;v--) {
+            	System.out.print(v);
+            	for(Map.Entry<Rectangle,Float> entry : findNumber(v,binaryRawImage).entrySet()) {
+            		totalIntegerEntry.put(entry.getKey(), v);
+            		joinToRectangle(totalEntry,entry.getKey(),entry.getValue());
+            	}
+            }
+            System.out.println();
+            
+            final TreeMap<Integer,Rectangle> sortedRectangle = new TreeMap<Integer,Rectangle>();
+            final StringBuffer answerSB = new StringBuffer();
+            for(Map.Entry<Rectangle,Float> entry : totalEntry.entrySet()) {
+            	sortedRectangle.put(entry.getKey().x,entry.getKey());
+                System.out.println("\tv=" + totalIntegerEntry.get(entry.getKey()) + " Rect " + entry.getKey() + "," + entry.getValue());
                 g.drawRect(entry.getKey().x, entry.getKey().y, entry.getKey().width, entry.getKey().height);
             }
             
+            for(Map.Entry<Integer,Rectangle> entry : sortedRectangle.entrySet()) {
+            	answerSB.append(totalIntegerEntry.get(entry.getValue()));
+            }
+            final String answer = answerSB.toString();
+            if(5 == answer.length() && inputFile.getName().indexOf(answer) >= 0) {
+            	success++;
+            	System.out.println("SUCCESS answer=" + answer);
+            }
+            else {
+            	System.out.println("FAILURE answer=" + answer);
+            }
             ImageIO.write(binaryRawImage, "JPEG",new File(inputFile.getParent(), "out" + inputFile.getName()));
             
 
