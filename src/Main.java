@@ -1,9 +1,12 @@
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
+import java.awt.Polygon;
 import java.awt.Rectangle;
+import java.awt.Shape;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -14,6 +17,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import javax.imageio.ImageIO;
 
@@ -140,6 +147,19 @@ public class Main {
             }
         }
         return score / (float)(rotateImage.getWidth() * rotateImage.getHeight());
+    }
+    
+    public static Shape getShape(BufferedImage clippedImage) {
+    	
+    	final Polygon polygon = new Polygon();
+        for (int y = 0; y < clippedImage.getHeight(); y++) {
+             if(clippedImage.getRGB(0, y) != Color.BLACK.getRGB()) {
+                 	
+             }
+        }
+       
+       return polygon;
+    	
     }
     
     public static BufferedImage clipEmpty(BufferedImage img) {
@@ -278,8 +298,8 @@ public class Main {
         
     }
     
-    public static Map<Rectangle,Float> findNumber(int v,BufferedImage verf_img) {
-        final float threshold = 0.7f;
+    public static Map<Rectangle,Float> findNumber(int v,BufferedImage verf_img) throws IOException {
+        final float threshold = 0.6f;
         final int RANGE = 60;
         final int fontSize = 26;
         final Font font = new Font("Times New Roman",Font.BOLD,fontSize);
@@ -287,37 +307,77 @@ public class Main {
         final HashMap<Rectangle,Float> mapOfRectangle = new HashMap<Rectangle,Float>();
         
         final int[][] verfImgAccArrays = toAccArrays(verf_img);        
+        int debug_reduce = 0;
+        int debug_total = 0;
         
-        for(int degree = -RANGE;degree <= RANGE;degree++) {
+        final String tempdir = "/Users/bbkb/Documents/workspace/RAILWAY_CAPTCHA/numbers";
+
+        for(int degree = -RANGE;degree <= RANGE;degree+=2) {
             //System.out.println("\t degree=" + degree);
-            final BufferedImage rotateImage = clipEmpty(rotateTextImage(rawNumberImage,degree));
+        	final File filename = new File(tempdir,String.valueOf(v) + "_" + String.valueOf(degree) + ".png");
+            final BufferedImage rotateImage = filename.exists() ? ImageIO.read(filename)  : clipEmpty(rotateTextImage(rawNumberImage,degree));
+            
+            if(!filename.exists()) {
+            	ImageIO.write(rotateImage, "PNG", filename);
+            }
+            
             final int[][] rotateImagesAccArrays = toAccArrays(rotateImage);
+            
             final int sumOfRawNumberPix = 1 + calculateSumPixles(rotateImagesAccArrays,new Rectangle(0,0,rotateImage.getWidth(),rotateImage.getHeight()));
+            
+            final int sumOfRawTopHalf = 1 + calculateSumPixles(rotateImagesAccArrays,new Rectangle(0,0,rotateImage.getWidth(),rotateImage.getHeight() >> 1));
+            final int sumOfRawBottomHalf = 1 + calculateSumPixles(rotateImagesAccArrays,new Rectangle(0,rotateImage.getHeight() >> 1,rotateImage.getWidth(),rotateImage.getHeight() >> 1));
+            final int sumOfRawLeftHalf = 1 + calculateSumPixles(rotateImagesAccArrays,new Rectangle(0,0,rotateImage.getWidth() >> 1,rotateImage.getHeight()));
+            final int sumOfRawRightHalf = 1 + calculateSumPixles(rotateImagesAccArrays,new Rectangle(rotateImage.getWidth() >> 1,0,rotateImage.getWidth() >> 1,rotateImage.getHeight()));
+            
             final int sumleftTopOfRawNumberPix = 1 +calculateSumPixles(rotateImagesAccArrays,new Rectangle(0,0,rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
             final int sumleftDownOfRawNumberPix = 1 + calculateSumPixles(rotateImagesAccArrays,new Rectangle(0,rotateImage.getHeight() >> 1,rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
             final int sumrightTopOfRawNumberPix = 1 + calculateSumPixles(rotateImagesAccArrays,new Rectangle(rotateImage.getWidth() >> 1,0,rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
             final int sumrightDownOfRawNumberPix = 1 + calculateSumPixles(rotateImagesAccArrays,new Rectangle(rotateImage.getWidth() >> 1,rotateImage.getHeight(),rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
             
-            int debug_reduce = 0;
-            int debug_total = 0;
+
             for (int x = 0; x < verf_img.getWidth() - rotateImage.getWidth(); x++) {
                 for (int y = 0; y < verf_img.getHeight() - rotateImage.getHeight(); y++) {
                 	debug_total++;
                 	
                 	final int sumOfRectangle = 1 + calculateSumPixles(verfImgAccArrays,new Rectangle(x,y,rotateImage.getWidth(),rotateImage.getHeight()));
-                    final int sumleftTopRectangle = 1 + calculateSumPixles(verfImgAccArrays,new Rectangle(x,y,rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
+                    
+                	final int sumOfTopHalf =  1 + calculateSumPixles(verfImgAccArrays,new Rectangle(x,y,rotateImage.getWidth(),rotateImage.getHeight() >> 1));
+                	final int sumOfBottomHalf = 1 + calculateSumPixles(verfImgAccArrays,new Rectangle(x,y + (rotateImage.getHeight() >> 1),rotateImage.getWidth(),rotateImage.getHeight() >> 1));
+                	final int sumOfLeftHalf = 1 + calculateSumPixles(verfImgAccArrays,new Rectangle(x,y,rotateImage.getWidth() >> 1,rotateImage.getHeight()));
+                	final int sumOfRightHalf = 1 + calculateSumPixles(verfImgAccArrays,new Rectangle(x + (rotateImage.getWidth() >> 1),y,rotateImage.getWidth() >> 1,rotateImage.getHeight()));
+                	
+                	final int sumleftTopRectangle = 1 + calculateSumPixles(verfImgAccArrays,new Rectangle(x,y,rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
                 	final int sumleftDownRectangle = 1 + calculateSumPixles(verfImgAccArrays,new Rectangle(x,y + (rotateImage.getHeight() >> 1),rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
                 	final int sumrightTopRectangle = 1 + calculateSumPixles(verfImgAccArrays,new Rectangle(x + (rotateImage.getWidth() >> 1),y,rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
                 	final int sumrightDownRectangle = 1 + calculateSumPixles(verfImgAccArrays,new Rectangle(x + (rotateImage.getWidth() >> 1),y+ (rotateImage.getHeight() >> 1),rotateImage.getWidth() >> 1,rotateImage.getHeight() >> 1));
                     
                 	
-                	if((float) sumOfRectangle / (float) sumOfRawNumberPix > 0.9f &&
-                    		(float) sumleftTopRectangle / (float) sumleftTopOfRawNumberPix > 0.9f &&
-                    		(float) sumleftDownRectangle / (float) sumleftDownOfRawNumberPix > 0.9f &&
-                    		(float) sumrightTopRectangle / (float) sumrightTopOfRawNumberPix > 0.9f &&
-                    		(float) sumrightDownRectangle / (float) sumrightDownOfRawNumberPix > 0.9f) {
+                	if((float) sumOfRectangle / (float) sumOfRawNumberPix > threshold  &&
+                			(float) sumOfTopHalf/ (float) sumOfRawTopHalf > threshold &&
+                			(float) sumOfBottomHalf / (float) sumOfRawBottomHalf > threshold &&
+                			(float) sumOfLeftHalf / (float) sumOfRawLeftHalf > threshold &&
+                			(float) sumOfRightHalf / (float) sumOfRawRightHalf > threshold &&
+                    		(float) sumleftTopRectangle / (float) sumleftTopOfRawNumberPix > threshold &&
+                    		(float) sumleftDownRectangle / (float) sumleftDownOfRawNumberPix > threshold &&
+                    		(float) sumrightTopRectangle / (float) sumrightTopOfRawNumberPix > threshold &&
+                    		(float) sumrightDownRectangle / (float) sumrightDownOfRawNumberPix > threshold) {
                 	
 	                    float score = score(verf_img,rotateImage,x,y);
+                		/*
+                		float score = 
+                			((float) sumOfRectangle / (float) sumOfRawNumberPix) + 
+                			((float) sumOfTopHalf/ (float) sumOfRawTopHalf) + 
+                			((float) sumOfBottomHalf / (float) sumOfRawBottomHalf) + 
+                			((float) sumOfLeftHalf / (float) sumOfRawLeftHalf) + 
+                			((float) sumOfRightHalf / (float) sumOfRawRightHalf) +
+                			((float) sumleftTopRectangle / (float) sumleftTopOfRawNumberPix) + 
+                			((float) sumleftDownRectangle / (float) sumleftDownOfRawNumberPix) + 
+                			((float) sumrightTopRectangle / (float) sumrightTopOfRawNumberPix) + 
+                			((float) sumrightDownRectangle / (float) sumrightDownOfRawNumberPix);
+                			
+                		score /= 9.0f;	
+                		*/
 	                    if(score > threshold) {
 	                        joinToRectangle(mapOfRectangle,new Rectangle(x,y,rotateImage.getWidth(),rotateImage.getHeight()),score);
 	                    }
@@ -329,9 +389,10 @@ public class Main {
                 }
             }
             
-            //System.out.println("redeuce=" + (float)debug_reduce / (float) debug_total);
+            
             
         }
+        //System.out.println("redeuce=" + (float)debug_reduce / (float) debug_total);
         
         return mapOfRectangle;
     }
@@ -364,6 +425,7 @@ public class Main {
         return accArrays[endX][endY] - (0 == startY ? 0 : accArrays[endX][startY - 1]) - (0 == startX ? 0 : accArrays[startX - 1][endY]) + (0 == startX || 0 == startY ? 0 : accArrays[startX -1][startY - 1]);
     }
     
+    private final static ExecutorService THREADPOOL = Executors.newFixedThreadPool(4);
 
     public static void main(String[] args) throws Exception {
         /*
@@ -393,9 +455,11 @@ public class Main {
         System.out.println("sum=" + calculateSumPixles(a,new Rectangle(1,1,2,2)));
         */
         
+    	
         final File inputFolder = new File(args[0]);
         float success = 0.0f;
         float total = 0.0f;
+        long alltimeTaken = 0L;
         for (File inputFile : inputFolder.listFiles()) {
             
             final String filename = inputFile.getName().toLowerCase();
@@ -404,6 +468,8 @@ public class Main {
             }
             total++;
             System.out.println("inputFile=" + inputFile);
+            
+            final long stime = System.currentTimeMillis();
             
             final BufferedImage rawImg = ImageIO.read(inputFile);
             final BufferedImage grayRawImage = toGray(rawImg);
@@ -432,9 +498,19 @@ public class Main {
             final HashMap<Rectangle,Integer> totalIntegerEntry = new HashMap<Rectangle,Integer>();
             
             g.setColor(Color.WHITE);
-            for(int v = 9;v >= 0;v--) {
+            final List<Future<Map<Rectangle,Float>>> featuresList = new ArrayList<Future<Map<Rectangle,Float>>>(10);
+            for(int v = 0;v < 10;v++) {
+            	final int value = v;
+            	featuresList.add(THREADPOOL.submit(new Callable<Map<Rectangle,Float>>(){
+
+					@Override
+					public Map<Rectangle, Float> call() throws Exception {
+						return findNumber(value,binaryRawImage);
+					}}));
+            }
+            for(int v = 0;v < 10;v++) {
             	System.out.print(v);
-            	for(Map.Entry<Rectangle,Float> entry : findNumber(v,binaryRawImage).entrySet()) {
+            	for(Map.Entry<Rectangle,Float> entry : featuresList.get(v).get().entrySet()) {
             		totalIntegerEntry.put(entry.getKey(), v);
             		joinToRectangle(totalEntry,entry.getKey(),entry.getValue());
             	}
@@ -460,12 +536,15 @@ public class Main {
             else {
             	System.out.println("FAILURE answer=" + answer);
             }
+            
+            alltimeTaken += (System.currentTimeMillis() - stime);
+            
             ImageIO.write(binaryRawImage, "JPEG",new File(inputFile.getParent(), "out" + inputFile.getName()));
             
 
         }
         
-        System.out.println("TP=" + success / total);
+        System.out.println("TP=" + success / total + " (" + success + "/" + total + ") avgtime=" + alltimeTaken / total);
         
         
         
