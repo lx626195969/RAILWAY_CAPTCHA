@@ -250,11 +250,10 @@ public class Main {
         return clippedImage;
     }
         
-    public static boolean joinToRectangle(HashMap<Rectangle,Float> map,Rectangle r,float score) {
+    public static boolean joinToRectangle(HashMap<Rectangle,Float> map,Rectangle r,float score,int maxNumbrOfElement) {
         Rectangle replaceKey = null;
         float minScore = Float.MAX_VALUE;
         Rectangle minScoreRectangle = null;
-        final int maxNumbrOfElement = 5;
         
         for(Map.Entry<Rectangle,Float> entry : map.entrySet()) {
             if(entry.getValue() < minScore) {
@@ -298,31 +297,44 @@ public class Main {
         
     }
     
-    public static Map<Rectangle,Float> findNumber(int v,BufferedImage verf_img) throws IOException {
+    private final static HashMap<String,BufferedImage> numberMap = new HashMap<String,BufferedImage>();
+    private final static HashMap<String,int[][]> accMap = new HashMap<String,int[][]>();
+    
+    public static Map<Rectangle,Float> findNumber(int v,BufferedImage verf_img,int[][] verfImgAccArrays) throws IOException {
         final float threshold = 0.6f;
         final int RANGE = 60;
         final int fontSize = 26;
         final Font font = new Font("Times New Roman",Font.BOLD,fontSize);
         final BufferedImage rawNumberImage = createTextImage(v,(int)Math.sqrt(fontSize*fontSize + fontSize*fontSize),font);
         final HashMap<Rectangle,Float> mapOfRectangle = new HashMap<Rectangle,Float>();
-        
-        final int[][] verfImgAccArrays = toAccArrays(verf_img);        
+
         int debug_reduce = 0;
         int debug_total = 0;
         
-        final String tempdir = "/Users/bbkb/Documents/workspace/RAILWAY_CAPTCHA/numbers";
+        //final String tempdir = "/Users/bbkb/Documents/workspace/RAILWAY_CAPTCHA/numbers";
 
-        for(int degree = -RANGE;degree <= RANGE;degree+=2) {
+        for(int degree = -RANGE;degree <= RANGE;degree++) {
             //System.out.println("\t degree=" + degree);
-        	final File filename = new File(tempdir,String.valueOf(v) + "_" + String.valueOf(degree) + ".png");
-            final BufferedImage rotateImage = filename.exists() ? ImageIO.read(filename)  : clipEmpty(rotateTextImage(rawNumberImage,degree));
-            
+        	//final File filename = new File(tempdir,String.valueOf(v) + "_" + String.valueOf(degree) + ".png");
+            //final BufferedImage rotateImage = filename.exists() ? ImageIO.read(filename)  : clipEmpty(rotateTextImage(rawNumberImage,degree));
+            /*
             if(!filename.exists()) {
             	ImageIO.write(rotateImage, "PNG", filename);
+            }*/
+        	final String key = String.valueOf(v) + "_" + String.valueOf(degree);
+        	BufferedImage rotateImage = numberMap.get(key);
+        	
+        	if(null == rotateImage) {
+        		rotateImage = clipEmpty(rotateTextImage(rawNumberImage,degree));
+        		numberMap.put(key, rotateImage);
+        	}
+            
+            int[][] rotateImagesAccArrays = accMap.get(key);
+            if(null == rotateImagesAccArrays) {
+            	rotateImagesAccArrays = toAccArrays(rotateImage);
+            	accMap.put(key, rotateImagesAccArrays);
             }
-            
-            final int[][] rotateImagesAccArrays = toAccArrays(rotateImage);
-            
+
             final int sumOfRawNumberPix = 1 + calculateSumPixles(rotateImagesAccArrays,new Rectangle(0,0,rotateImage.getWidth(),rotateImage.getHeight()));
             
             final int sumOfRawTopHalf = 1 + calculateSumPixles(rotateImagesAccArrays,new Rectangle(0,0,rotateImage.getWidth(),rotateImage.getHeight() >> 1));
@@ -379,7 +391,7 @@ public class Main {
                 		score /= 9.0f;	
                 		*/
 	                    if(score > threshold) {
-	                        joinToRectangle(mapOfRectangle,new Rectangle(x,y,rotateImage.getWidth(),rotateImage.getHeight()),score);
+	                        joinToRectangle(mapOfRectangle,new Rectangle(x,y,rotateImage.getWidth(),rotateImage.getHeight()),score,5);
 	                    }
                 	}
                 	else {
@@ -425,7 +437,7 @@ public class Main {
         return accArrays[endX][endY] - (0 == startY ? 0 : accArrays[endX][startY - 1]) - (0 == startX ? 0 : accArrays[startX - 1][endY]) + (0 == startX || 0 == startY ? 0 : accArrays[startX -1][startY - 1]);
     }
     
-    private final static ExecutorService THREADPOOL = Executors.newFixedThreadPool(4);
+    private final static ExecutorService THREADPOOL = Executors.newFixedThreadPool(2);
 
     public static void main(String[] args) throws Exception {
         /*
@@ -496,6 +508,7 @@ public class Main {
             final Graphics2D g = binaryRawImage.createGraphics();
             final HashMap<Rectangle,Float> totalEntry = new HashMap<Rectangle,Float>();
             final HashMap<Rectangle,Integer> totalIntegerEntry = new HashMap<Rectangle,Integer>();
+            final int[][] verfImgAccArrays = toAccArrays(binaryRawImage); 
             
             g.setColor(Color.WHITE);
             final List<Future<Map<Rectangle,Float>>> featuresList = new ArrayList<Future<Map<Rectangle,Float>>>(10);
@@ -505,14 +518,14 @@ public class Main {
 
 					@Override
 					public Map<Rectangle, Float> call() throws Exception {
-						return findNumber(value,binaryRawImage);
+						return findNumber(value,binaryRawImage,verfImgAccArrays);
 					}}));
             }
             for(int v = 0;v < 10;v++) {
             	System.out.print(v);
             	for(Map.Entry<Rectangle,Float> entry : featuresList.get(v).get().entrySet()) {
             		totalIntegerEntry.put(entry.getKey(), v);
-            		joinToRectangle(totalEntry,entry.getKey(),entry.getValue());
+            		joinToRectangle(totalEntry,entry.getKey(),entry.getValue(),5);
             	}
             }
             System.out.println();
