@@ -210,8 +210,37 @@ public class conn {
         return ticketno;
     }
     
-    public static void cancelTicket(String person_id,String ticketno) {
+    public static boolean cancelTicket(String person_id,String ticketno,Map<String,String> cookies) throws Exception {
+        String url = "http://railway.hinet.net/ccancel_rt.jsp?personId=" + URLEncoder.encode(person_id, "utf8") + "&orderCode=" + URLEncoder.encode(ticketno, "utf8");
+        System.out.println("cancelTicket url=" + url);
         
+        URLConnection conn = new URL(url).openConnection();
+        putCookies(conn,cookies);
+        conn.addRequestProperty("Referer", "http://railway.hinet.net/ccancel.jsp?personId=" + person_id + "&orderCode=" + ticketno);
+        conn.addRequestProperty("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_4) AppleWebKit/536.11 (KHTML, like Gecko) Chrome/20.0.1132.57 Safari/536.11");
+        conn.setDoInput(true);
+        conn.connect();
+        
+        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+        String line = null;
+        try{
+            do {
+                
+                line = br.readLine();
+                if(line != null) {
+                    System.out.println(">>>" + line);
+                    int startpos = line.indexOf("取消成功");
+                    if(startpos > 0) {
+                        return true;
+                    }
+                }
+            }while(line != null);
+        }
+        finally {
+            conn.getInputStream().close();
+        }
+        
+        return false;
     }
 
     public static void main(String[] argus) throws Exception {
@@ -224,8 +253,8 @@ public class conn {
         if(allowBookingDateList.size() < 2) {
             return;
         }
-        
-        formData.put("person_id", "A127535236");
+        final String person_id = "A127535236";
+        formData.put("person_id", person_id);
         formData.put("from_station", "100");
         formData.put("to_station", "004");
         formData.put("getin_date", allowBookingDateList.get(3));
@@ -256,6 +285,10 @@ public class conn {
         formData.put("randInput", randomNumber);
         
         final String ticketno = bookTicket(formData,cookies);
-        System.out.println("ticketno=" + ticketno);
+        System.out.println("person_id=" + person_id + " ticketno=" + ticketno);
+        
+        final boolean isCancel = cancelTicket(person_id, ticketno, cookies);
+        
+        System.out.print("isCancel=" + isCancel);
     }
 }
