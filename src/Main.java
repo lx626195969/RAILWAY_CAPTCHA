@@ -18,6 +18,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -437,36 +438,77 @@ public class Main {
         return accArrays[endX][endY] - (0 == startY ? 0 : accArrays[endX][startY - 1]) - (0 == startX ? 0 : accArrays[startX - 1][endY]) + (0 == startX || 0 == startY ? 0 : accArrays[startX -1][startY - 1]);
     }
     
-    private final static ExecutorService THREADPOOL = Executors.newFixedThreadPool(2);
+    public static String getCaptcha(BufferedImage rawImg) throws Exception {
+        final BufferedImage grayRawImage = toGray(rawImg);
+        final int[] hist = histogram(grayRawImage);
+        final GrayPix[] pixHist = new GrayPix[hist.length];
+        for (int i = 0; i < hist.length; i++) {
+            pixHist[i] = new GrayPix();
+            pixHist[i].color = i;
+            pixHist[i].volume = hist[i];
+        }
 
-    public static void main(String[] args) throws Exception {
-        /*
-        BufferedImage b = new BufferedImage(4,3,BufferedImage.TYPE_BYTE_BINARY);
-        b.setRGB(0, 0, Color.WHITE.getRGB());
-        b.setRGB(1, 0, Color.WHITE.getRGB());
-        b.setRGB(2, 0, Color.WHITE.getRGB());
-        b.setRGB(3, 0, Color.BLACK.getRGB());
-        
-        b.setRGB(0, 1, Color.BLACK.getRGB());
-        b.setRGB(1, 1, Color.WHITE.getRGB());
-        b.setRGB(2, 1, Color.WHITE.getRGB());
-        b.setRGB(3, 1, Color.WHITE.getRGB());
-        
-        b.setRGB(0, 2, Color.WHITE.getRGB());
-        b.setRGB(1, 2, Color.WHITE.getRGB());
-        b.setRGB(2, 2, Color.BLACK.getRGB());
-        b.setRGB(3, 2, Color.BLACK.getRGB());        
-        
-        int[][] a = toAccArrays(b);
-        for(int x = 0;x < a.length;x++) {
-            for(int y = 0;y < a[x].length;y++) {
-                System.out.println("(" + x + "," + y + ")=" + a[x][y]);
+        Arrays.sort(pixHist, new GrayPixComparator());
+        final Set<Integer> reserverColor = new HashSet<Integer>();
+        for (int i = 0; i < pixHist.length; i++) {
+            if (pixHist[i].volume < 200 && pixHist[i].color < 128) {
+                reserverColor.add(new Color(pixHist[i].color, pixHist[i].color,
+                        pixHist[i].color).getRGB());
+                //System.out.println("color reserve " + pixHist[i].color + " " + pixHist[i].volume);
             }
+            //System.out.println("color " + pixHist[i].color + " " + pixHist[i].volume);
         }
         
-        System.out.println("sum=" + calculateSumPixles(a,new Rectangle(1,1,2,2)));
-        */
+        final BufferedImage binaryRawImage = toBinaryImage(removedColorImage(grayRawImage, reserverColor, Color.BLACK));
+        final Graphics2D g = binaryRawImage.createGraphics();
+        final HashMap<Rectangle,Float> totalEntry = new HashMap<Rectangle,Float>();
+        final HashMap<Rectangle,Integer> totalIntegerEntry = new HashMap<Rectangle,Integer>();
+        final int[][] verfImgAccArrays = toAccArrays(binaryRawImage); 
         
+        g.setColor(Color.WHITE);
+        /*
+        final List<Future<Map<Rectangle,Float>>> featuresList = new ArrayList<Future<Map<Rectangle,Float>>>(10);
+        for(int v = 0;v < 10;v++) {
+            final int value = v;
+            featuresList.add(THREADPOOL.submit(new Callable<Map<Rectangle,Float>>(){
+
+                @Override
+                public Map<Rectangle, Float> call() throws Exception {
+                    return findNumber(value,binaryRawImage,verfImgAccArrays);
+                }}));
+        }*/
+        for(int v = 0;v < 10;v++) {
+            System.out.print(v);
+            for(Map.Entry<Rectangle,Float> entry : findNumber(v,binaryRawImage,verfImgAccArrays).entrySet()) {
+                totalIntegerEntry.put(entry.getKey(), v);
+                joinToRectangle(totalEntry,entry.getKey(),entry.getValue(),5);
+            }
+        }
+        System.out.println();
+        
+        final TreeMap<Integer,Rectangle> sortedRectangle = new TreeMap<Integer,Rectangle>();
+        final StringBuffer answerSB = new StringBuffer();
+        for(Map.Entry<Rectangle,Float> entry : totalEntry.entrySet()) {
+            sortedRectangle.put(entry.getKey().x,entry.getKey());
+            System.out.println("\tv=" + totalIntegerEntry.get(entry.getKey()) + " Rect " + entry.getKey() + "," + entry.getValue());
+            g.drawRect(entry.getKey().x, entry.getKey().y, entry.getKey().width, entry.getKey().height);
+        }
+        
+        for(Map.Entry<Integer,Rectangle> entry : sortedRectangle.entrySet()) {
+            answerSB.append(totalIntegerEntry.get(entry.getValue()));
+        }
+        final String answer = answerSB.toString();
+        if(5 == answer.length()) {
+            return answer.toString();
+        }
+        else {
+            return null;
+        }
+    }
+    
+    private final static ExecutorService THREADPOOL = Executors.newFixedThreadPool(4);
+
+    public static void main(String[] args) throws Exception {
     	
         final File inputFolder = new File(args[0]);
         float success = 0.0f;
@@ -484,65 +526,9 @@ public class Main {
             final long stime = System.currentTimeMillis();
             
             final BufferedImage rawImg = ImageIO.read(inputFile);
-            final BufferedImage grayRawImage = toGray(rawImg);
-            final int[] hist = histogram(grayRawImage);
-            final GrayPix[] pixHist = new GrayPix[hist.length];
-            for (int i = 0; i < hist.length; i++) {
-                pixHist[i] = new GrayPix();
-                pixHist[i].color = i;
-                pixHist[i].volume = hist[i];
-            }
 
-            Arrays.sort(pixHist, new GrayPixComparator());
-            final Set<Integer> reserverColor = new HashSet<Integer>();
-            for (int i = 0; i < pixHist.length; i++) {
-                if (pixHist[i].volume < 200 && pixHist[i].color < 128) {
-                    reserverColor.add(new Color(pixHist[i].color, pixHist[i].color,
-                            pixHist[i].color).getRGB());
-                    //System.out.println("color reserve " + pixHist[i].color + " " + pixHist[i].volume);
-                }
-                //System.out.println("color " + pixHist[i].color + " " + pixHist[i].volume);
-            }
-            
-            final BufferedImage binaryRawImage = toBinaryImage(removedColorImage(grayRawImage, reserverColor, Color.BLACK));
-            final Graphics2D g = binaryRawImage.createGraphics();
-            final HashMap<Rectangle,Float> totalEntry = new HashMap<Rectangle,Float>();
-            final HashMap<Rectangle,Integer> totalIntegerEntry = new HashMap<Rectangle,Integer>();
-            final int[][] verfImgAccArrays = toAccArrays(binaryRawImage); 
-            
-            g.setColor(Color.WHITE);
-            final List<Future<Map<Rectangle,Float>>> featuresList = new ArrayList<Future<Map<Rectangle,Float>>>(10);
-            for(int v = 0;v < 10;v++) {
-            	final int value = v;
-            	featuresList.add(THREADPOOL.submit(new Callable<Map<Rectangle,Float>>(){
-
-					@Override
-					public Map<Rectangle, Float> call() throws Exception {
-						return findNumber(value,binaryRawImage,verfImgAccArrays);
-					}}));
-            }
-            for(int v = 0;v < 10;v++) {
-            	System.out.print(v);
-            	for(Map.Entry<Rectangle,Float> entry : featuresList.get(v).get().entrySet()) {
-            		totalIntegerEntry.put(entry.getKey(), v);
-            		joinToRectangle(totalEntry,entry.getKey(),entry.getValue(),5);
-            	}
-            }
-            System.out.println();
-            
-            final TreeMap<Integer,Rectangle> sortedRectangle = new TreeMap<Integer,Rectangle>();
-            final StringBuffer answerSB = new StringBuffer();
-            for(Map.Entry<Rectangle,Float> entry : totalEntry.entrySet()) {
-            	sortedRectangle.put(entry.getKey().x,entry.getKey());
-                System.out.println("\tv=" + totalIntegerEntry.get(entry.getKey()) + " Rect " + entry.getKey() + "," + entry.getValue());
-                g.drawRect(entry.getKey().x, entry.getKey().y, entry.getKey().width, entry.getKey().height);
-            }
-            
-            for(Map.Entry<Integer,Rectangle> entry : sortedRectangle.entrySet()) {
-            	answerSB.append(totalIntegerEntry.get(entry.getValue()));
-            }
-            final String answer = answerSB.toString();
-            if(5 == answer.length() && inputFile.getName().indexOf(answer) >= 0) {
+            final String answer = getCaptcha(rawImg);
+            if(answer != null && 5 == answer.length() && inputFile.getName().indexOf(answer) >= 0) {
             	success++;
             	System.out.println("SUCCESS answer=" + answer);
             }
@@ -552,28 +538,13 @@ public class Main {
             
             alltimeTaken += (System.currentTimeMillis() - stime);
             
-            ImageIO.write(binaryRawImage, "JPEG",new File(inputFile.getParent(), "out" + inputFile.getName()));
+            //ImageIO.write(binaryRawImage, "JPEG",new File(inputFile.getParent(), "out" + inputFile.getName()));
             
 
         }
         
         System.out.println("TP=" + success / total + " (" + success + "/" + total + ") avgtime=" + alltimeTaken / total);
-        
-        
-        
-        /*
-        final int fontSize = 26;
-        final Font font = new Font("Times New Roman",Font.BOLD,fontSize);
-        
-        for(int i = 0;i < 10;i++) {
-            ImageIO.write(clipEmpty(createTextImage(i,(int)(Math.sqrt(fontSize*fontSize + fontSize*fontSize)),font)), "JPEG", new File(inputFolder, "out" + String.valueOf(i) + ".jpg"));
-        }
-        */
-        /*
-        final int theta = 60;
-        for(int i = 0;i < 10;i++) {
-            ImageIO.write(rotateTextImage(createTextImage(i,(int)(Math.sqrt(fontSize*fontSize + fontSize*fontSize)),font),theta), "JPEG", new File(inputFolder, "out" + String.valueOf(i) + "_" + String.valueOf(theta) + ".jpg"));
-        }*/
+
         
     }
     
