@@ -90,8 +90,9 @@ public class conn {
         return null;
     }
     
-    public static Map<String,String> getCookies(Map<String,String> formData) throws Exception {
+    public static Map<String,String> getCookies(Map<String,String> formData,StringBuffer nextActionSB) throws Exception {
         final Map<String,String> cookies = new HashMap<String,String>();
+        final Pattern actionPattern = Pattern.compile("action=\"(\\S+)\"");
         URLConnection conn = new URL("http://railway.hinet.net/check_ctno1.jsp").openConnection();
         conn.addRequestProperty("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_4) AppleWebKit/536.11 (KHTML, like Gecko) Chrome/20.0.1132.57 Safari/536.11");
         conn.setDoInput(true);
@@ -136,6 +137,13 @@ public class conn {
         do {
             
             line = br.readLine();
+            
+            if(line != null) {
+                final Matcher matcher = actionPattern.matcher(line);
+                if(matcher.find()) {
+                    nextActionSB.append(matcher.group(1));
+                }
+            }
             if(line != null) {
                 System.out.println(">>>" + line);
             }
@@ -168,12 +176,12 @@ public class conn {
         return answer;
     }
     
-    public static String bookTicket(Map<String,String> formData,Map<String,String> cookies) throws Exception{
+    public static String bookTicket(Map<String,String> formData,Map<String,String> cookies,String nextActionString) throws Exception{
         final Pattern pattern = Pattern.compile("(\\d{5,7})");
        
-        final String jsessionid = getJSESSIONID(cookies);
+        //final String jsessionid = getJSESSIONID(cookies);
         final String sgetData = "?" + toPostData(formData);
-        final String url = "http://railway.hinet.net/order_no1.jsp;jsessionid=" + jsessionid + sgetData;
+        final String url = "http://railway.hinet.net/" + nextActionString + sgetData;
         
         String ticketno = null;
         
@@ -256,19 +264,24 @@ public class conn {
         final String person_id = "A127535236";
         formData.put("person_id", person_id);
         formData.put("from_station", "100");
-        formData.put("to_station", "004");
-        formData.put("getin_date", allowBookingDateList.get(3));
-        formData.put("train_no", "242");
+        formData.put("to_station", "146");
+        formData.put("getin_date", allowBookingDateList.get(allowBookingDateList.size() - 1));
+        formData.put("train_no", "117");
         formData.put("order_qty_str", "1");
         formData.put("n_order_qty_str", "0");
         formData.put("d_order_qty_str", "0");
         formData.put("b_order_qty_str", "0");
         formData.put("returnTicket", "0");
-        
-        final Map<String,String> cookies = getCookies(formData);
+        StringBuffer nextActionStringBuffer = new StringBuffer();
+        final Map<String,String> cookies = getCookies(formData,nextActionStringBuffer);
         System.out.println("cookies=" + cookies);
-        
+        final String nextActionString = nextActionStringBuffer.toString();
+        System.out.println("nextActionString=" + nextActionString);
         if(null == cookies || cookies.isEmpty()) {
+            return;
+        }
+        
+        if("".equals(nextActionString)) {
             return;
         }
         
@@ -284,7 +297,7 @@ public class conn {
         
         formData.put("randInput", randomNumber);
         
-        final String ticketno = bookTicket(formData,cookies);
+        final String ticketno = bookTicket(formData,cookies,nextActionString);
         System.out.println("person_id=" + person_id + " ticketno=" + ticketno);
         
         final boolean isCancel = cancelTicket(person_id, ticketno, cookies);
